@@ -21,7 +21,8 @@ button.red{background:#c93636;color:white} button:hover{filter:brightness(.96)}
 .center{display:flex;flex-direction:column;min-height:0}
 #stage{width:100%;height:100%;display:block;background:#eaf0f6;cursor:grab;touch-action:none}
 .robotbox{position:relative;flex:1;min-height:420px;border-bottom:1px solid #ddd}
-.statusbar{display:flex;gap:8px;flex-wrap:wrap;padding:8px;background:#f7f8fa;font-size:12px}
+.statusbar{display:flex;flex-direction:column;gap:6px;padding:10px;background:#f7f8fa;font-size:12px}.srow{display:flex;gap:6px;flex-wrap:wrap}
+.panel.right{display:flex;flex-direction:column}.panel.right .tabs{flex:none}.panel.right .content{flex:1;height:auto;min-height:0}.statuswrap{flex:none;border-top:1px solid #d7dce5}
 .badge{padding:4px 7px;border-radius:5px;background:#e8edf4}.ok{background:#d9f4e5;color:#11653a}.warn{background:#fff0c7;color:#795500}
 .tabs{display:flex;border-bottom:1px solid #ddd}.tab{padding:10px 12px;cursor:pointer;font-size:13px}.tab.active{font-weight:bold;border-bottom:2px solid #1769d1}
 .content{padding:10px;overflow:auto;height:calc(100% - 40px)}
@@ -33,8 +34,8 @@ input{width:100%;padding:6px;border:1px solid #ccd3de;border-radius:5px}
 .help code{background:#eef1f5;padding:2px 4px;border-radius:3px}
 .notice{padding:8px;background:#fff8df;border-left:3px solid #e3a800;font-size:12px;margin-bottom:8px}
 #msg{font-size:12px;min-height:18px;padding:0 4px}
-@media(max-width:1050px){.app{grid-template-columns:340px 1fr}.panel.right{display:none}}
-@media(max-width:760px){.app{display:block;height:auto}.panel{height:500px;margin-bottom:10px}.robotbox{height:400px}}
+@media(max-width:1050px){.app{grid-template-columns:340px 1fr;grid-template-rows:1fr auto}.panel.right{grid-column:1/-1}.panel.right .tabs,.panel.right .content{display:none!important}}
+@media(max-width:760px){.app{display:block;height:auto}.panel{height:500px;margin-bottom:10px}.panel.right{height:auto}.robotbox{height:400px}}
 .ed{position:relative;flex:1;min-height:0;background:#10151d;overflow:hidden}
 #bar{position:absolute;left:0;right:0;height:22px;display:none;pointer-events:none;background:rgba(23,105,209,.5);border-left:3px solid #5ea3ff}
 #bar.next{background:rgba(227,168,0,.35);border-left-color:#e3a800}
@@ -42,6 +43,7 @@ input{width:100%;padding:6px;border:1px solid #ccd3de;border-radius:5px}
 .ex{padding:0 10px 8px;display:flex;flex-wrap:wrap;gap:5px}.ex button{font-size:12px;padding:5px 8px}
 .lamp{display:inline-block;width:15px;height:15px;line-height:15px;border-radius:50%;background:#c5ccd6;text-align:center;font-size:9px;margin-left:2px}.lamp.on{background:#22c55e;color:#fff}
 .ex button.on{background:#17834b;color:#fff}
+#exbtn button.sel{background:#1769d1;color:#fff;box-shadow:0 0 0 2px #9cc4f5}
 #cmdinfo{flex:none;box-sizing:border-box;width:calc(100% - 20px);max-width:680px;margin:2px auto 8px;padding:8px 12px;border-radius:8px;background:#16202c;border:1px solid #2f4258;border-top:3px solid #5ea3ff;font-size:12.5px;line-height:1.45;color:#d5e0ee;min-height:58px;text-align:center}
 #cmdinfo b{color:#7dd3a0;font-size:11px;letter-spacing:.06em;margin-right:6px}#cmdinfo code{color:#8ec5ff;font-family:ui-monospace,Menlo,Consolas,monospace}
 </style>
@@ -57,21 +59,24 @@ input{width:100%;padding:6px;border:1px solid #ccd3de;border-radius:5px}
     <h2>VAL Program</h2>
     <div class="editor">
 <div class="ed"><div id="bar"></div><textarea id="code">.PROGRAM PICK10
-  SPEED 30
+  SPEED 5
   OPENI
-  MOVE HOME
-
+  POINT DROP = -150,-190,40
   SET COUNT = 0
-LOOP:
-  MOVE P1
-  APPRO P1, 50
+NEXT:
+  APPRO P1, 60
+  MOVES P1
   CLOSEI
-  DEPART 50
-  MOVE P2
+  DEPART 60
+  APPRO DROP, 60
+  MOVES DROP
   OPENI
+  DEPART 60
+  SHIFT P1 BY 40,0,0
+  SHIFT DROP BY 40,0,0
   SET COUNT = COUNT + 1
-  IF COUNT < 10 JUMP LOOP
-
+  IF COUNT < 10 JUMP NEXT
+  TYPE "Picked ", COUNT
   MOVE HOME
 .END</textarea></div>
       <div class="controls">
@@ -91,17 +96,6 @@ LOOP:
     <div id="cmdinfo"><span style="opacity:.7">Command description appears here while a program runs or steps.</span></div>
     <div class="robotbox">
       <canvas id="stage"></canvas>
-    </div>
-    <div class="statusbar">
-      <span class="badge">Mode: <b id="mode">READY</b></span>
-      <span class="badge">Line: <b id="line">—</b></span>
-      <span class="badge">Speed: <b id="speed">20</b>%</span>
-      <span class="badge">X <b id="x">0</b></span>
-      <span class="badge">Y <b id="y">0</b></span>
-      <span class="badge">Z <b id="z">0</b></span>
-      <span class="badge">Gripper: <b id="grip">OPEN</b></span>
-      <span class="badge">OUT <span id="lamps"></span></span>
-      <span class="badge">IN <span id="ilamps"></span></span>
     </div>
   </section>
 
@@ -149,17 +143,37 @@ LOOP:
       <code>.END</code><br><br>
       This is an educational simulator. It intentionally does not claim to implement every controller-specific VAL/VAL-II command.
     </div>
+    <div class="statuswrap">
+      <h2>Status</h2>
+      <div class="statusbar">
+        <div class="srow">
+          <span class="badge">Mode: <b id="mode">READY</b></span>
+          <span class="badge">Line: <b id="line">—</b></span>
+          <span class="badge">Speed: <b id="speed">5</b>%</span>
+        </div>
+        <div class="srow">
+          <span class="badge">X <b id="x">0</b></span>
+          <span class="badge">Y <b id="y">0</b></span>
+          <span class="badge">Z <b id="z">0</b></span>
+          <span class="badge">Gripper: <b id="grip">OPEN</b></span>
+        </div>
+        <div class="srow">
+          <span class="badge">OUT <span id="lamps"></span></span>
+          <span class="badge">IN <span id="ilamps"></span></span>
+        </div>
+      </div>
+    </div>
   </section>
 </div>
 
 <script>
 const canvas=document.getElementById("stage"),ctx=canvas.getContext("2d");
-let robot={x:0,y:0,z:120,rx:0,ry:0,rz:0,j:[0,0,0,0,0,0],grip:false,speed:20};
+let robot={x:0,y:0,z:260,rx:0,ry:0,rz:0,j:[0,0,0,0,0,0],grip:false,speed:5};
 let target=null, anim=null, paused=false, running=false, pc=0, lines=[], labels={}, vars={};
 let locations={
  HOME:{x:0,y:0,z:260,rx:0,ry:0,rz:0},
  P1:{x:-150,y:190,z:40,rx:0,ry:180,rz:0},
- P2:{x:170,y:190,z:100,rx:0,ry:180,rz:0},
+ P2:{x:170,y:190,z:40,rx:0,ry:180,rz:0},
  P3:{x:0,y:-190,z:80,rx:0,ry:180,rz:0},
  P4:{x:130,y:-190,z:60,rx:0,ry:180,rz:0}
 };
@@ -214,12 +228,13 @@ function draw(){
  const A=armPose(),W=(r,z)=>P(r*A.c,r*A.s,z),S0=W(0,A.H),EL=W(A.er,A.ez),WR=W(A.wr,A.wz);
  link(S0,EL,50,38,"#eef1f5","#6f7a88");hub(S0,27*S0.s,"#38414d");
  link(EL,WR,38,26,"#e2e7ed","#6f7a88");hub(EL,21*EL.s,"#38414d");hub(WR,15*WR.s,"#38414d");
- // end effector: flange + parallel-jaw gripper
+ // end effector: fixed world orientation (jaws open along Y, same as the part faces, never turns with the arm)
+ // flange + parallel-jaw gripper
  const tx=A.wr*A.c,ty=A.wr*A.s,tz=A.wz-50,cg=held?14:4,inner=cg+gv*(24-cg);
  seg(P(tx,ty,tz+36),WR,10*WR.s,"#59636f");cylv(tx,ty,tz+20,tz+36,15,[70,78,92]);
- box(tx,ty,tz+7,11,29,13,[104,114,130],A.th);
- const J=[-1,1].map(g=>{const o=g*(inner+4);return{x:tx-o*A.s,y:ty+o*A.c,g}}).map(j=>({...j,d:P(j.x,j.y,tz-18).d})).sort((a,b)=>b.d-a.d);
- const jaw=j=>{box(j.x,j.y,tz-18,8,4,12,[168,176,188],A.th);box(j.x-j.g*3.5*A.s*-1*0,j.y,tz-8,8,4.5,3,[70,78,92],A.th)};
+ box(tx,ty,tz+7,11,29,13,[104,114,130],0);
+ const J=[-1,1].map(g=>{const o=g*(inner+4);return{x:tx,y:ty+o,g}}).map(j=>({...j,d:P(j.x,j.y,tz-18).d})).sort((a,b)=>b.d-a.d);
+ const jaw=j=>{box(j.x,j.y,tz-18,8,4,12,[168,176,188],0);box(j.x,j.y,tz-8,8,4.5,3,[70,78,92],0)};
  jaw(J[0]);objects.filter(o=>o.visible&&o.held).forEach(o=>box(o.x,o.y,o.z,14,14,14,OC,0));jaw(J[1]);
  // recorded points: red dots + labels (drawn last, on top)
  ctx.font="bold 13px Arial";ctx.lineJoin="round";
@@ -294,7 +309,7 @@ cd.addEventListener("scroll",placeBar);
 function lamps(){const L=a=>a.map((v,i)=>`<span class="lamp${v?" on":""}">${i+1}</span>`).join("");document.getElementById("lamps").innerHTML=L(outs);document.getElementById("ilamps").innerHTML=L(ins);ins.forEach((v,i)=>{const b=document.getElementById("in"+(i+1));if(b)b.classList.toggle("on",!!v)})}
 function toggleIn(n){ins[n-1]^=1;lamps();log("INPUT "+n+(ins[n-1]?" ON":" OFF")+" (external)")}
 function gripTo(v){const a=gv,t0=performance.now();return new Promise(r=>{(function f(t){const q=Math.min(1,(t-t0)/250);gv=a+(v-a)*q;draw();q<1?requestAnimationFrame(f):r()})(t0)})}
-function grab(){if(held)return;let b=null,bd=1e9;objects.forEach(o=>{const d=Math.hypot(o.x-robot.x,o.y-robot.y);if(o.visible&&d<25&&Math.abs(o.z-robot.z)<35&&d<bd){b=o;bd=d}});if(b){b.held=true;held=b;log("Object gripped")}}
+function grab(){if(held)return;let b=null,bd=1e9;objects.forEach(o=>{const d=Math.hypot(o.x-robot.x,o.y-robot.y);if(o.visible&&d<25&&Math.abs(o.z-robot.z)<35&&d<bd){b=o;bd=d}});if(b){b.held=true;held=b;log("Object gripped")}else log("CLOSE: no object at tool tip (move down onto the part first)")}
 function drop(){if(!held)return;const h=held;h.held=false;held=null;const n=objects.filter(o=>o!==h&&o.visible&&Math.hypot(o.x-h.x,o.y-h.y)<15).length;h.z=18+30*n;log("Object released"+(n?" (stacked on "+n+")":""))}
 function restore(){gv=robot.grip?0:1;locations=JSON.parse(JSON.stringify(baseLoc));objects=mkObjs();held=null;outs=[0,0,0,0];lamps();renderLocations()}
 function edit(n,k,v){locations[n][k]=+v;baseLoc[n]=baseLoc[n]||{};baseLoc[n][k]=+v}
@@ -321,8 +336,12 @@ function evalExpr(s){
  if(!/^[0-9+\-*/().<>=!&| \t]+$/.test(s))throw Error("Invalid expression: "+s);
  return Function("return ("+s+")")();
 }
-function moveTo(p){
+// keep-out zone: tool may not enter the pedestal/column/turret (lifted over it instead)
+function safePt(x,y,z){const r=Math.hypot(x,y);if(r<95){const zs=r<=61?152:152*(95-r)/34;if(z<zs)z=zs}return{x,y,z}}
+function moveTo(p0){
  return new Promise(resolve=>{
+  const sp=safePt(p0.x,p0.y,p0.z),p={...p0,z:sp.z};
+  if(sp.z!==p0.z)log("Target is inside the robot body - raised to Z="+Math.round(sp.z));
   target={...p}; const start={x:robot.x,y:robot.y,z:robot.z},t0=performance.now();
   const dist=Math.hypot(p.x-start.x,p.y-start.y,p.z-start.z);
   const dur=Math.max(120,1800/(Math.max(1,robot.speed))*Math.max(1,dist/120));
@@ -330,7 +349,7 @@ function moveTo(p){
    if(paused){anim=requestAnimationFrame(frame);return}
    let q=Math.min(1,(t-t0)/dur);
    q=q*q*(3-2*q);
-   robot.x=start.x+(p.x-start.x)*q;robot.y=start.y+(p.y-start.y)*q;robot.z=start.z+(p.z-start.z)*q;
+   {const c=safePt(start.x+(p.x-start.x)*q,start.y+(p.y-start.y)*q,start.z+(p.z-start.z)*q);robot.x=c.x;robot.y=c.y;robot.z=c.z}
    robot.rx=p.rx??0;robot.ry=p.ry??0;robot.rz=p.rz??0;ui();
    if(q<1)anim=requestAnimationFrame(frame);else{target=null;resolve()}
   }
@@ -373,7 +392,7 @@ async function execute(s){
 }
 async function runProgram(){
  if(running){return}
- parseProgram();restore();msg("");running=true;paused=false;pc=0;vars={};document.getElementById("historyText").textContent="";
+ parseProgram();restore();robot.speed=5;msg("");running=true;paused=false;pc=0;vars={};document.getElementById("historyText").textContent="";
  while(running && pc<lines.length){
   if(paused){await new Promise(r=>setTimeout(r,100));continue}
   const cur=lines[pc];document.getElementById("line").textContent=cur.n+1;hi(cur.n,"run");
@@ -385,7 +404,7 @@ async function runProgram(){
 let stepBusy=false,stepping=false;
 async function stepProgram(){
  if(stepBusy||(running&&!paused))return;
- if(!stepping||pc>=lines.length){parseProgram();restore();vars={};pc=0;stepping=true;msg("");document.getElementById("historyText").textContent=""}
+ if(!stepping||pc>=lines.length){parseProgram();restore();robot.speed=5;vars={};pc=0;stepping=true;msg("");document.getElementById("historyText").textContent=""}
  if(!lines.length)return;
  stepBusy=true;const cur=lines[pc];hi(cur.n,"run");
  try{const r=await execute(cur.text);if(r!=="JUMP")pc++}catch(e){msg(e.message,"warn");log("ERROR line "+(cur.n+1)+": "+e.message);stepBusy=false;stepping=false;return}
@@ -394,7 +413,7 @@ async function stepProgram(){
 }
 function pauseProgram(){paused=!paused;ui()}
 function resetSim(){
- cancelAnimationFrame(anim);running=false;paused=false;pc=0;vars={};robot={x:0,y:0,z:120,rx:0,ry:0,rz:0,j:[0,0,0,0,0,0],grip:false,speed:20};
+ cancelAnimationFrame(anim);running=false;paused=false;pc=0;vars={};robot={x:0,y:0,z:260,rx:0,ry:0,rz:0,j:[0,0,0,0,0,0],grip:false,speed:5};
  restore();stepping=false;stepBusy=false;hi(-1);target=null;msg("");document.getElementById("historyText").textContent="";ui();
 }
 function teachCurrent(){
@@ -405,13 +424,13 @@ function showTab(id,el){
  ["teach","history","help"].forEach(x=>document.getElementById(x).style.display=x===id?"block":"none");
  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));el.classList.add("active");
 }
-const EXAMPLES={"pick": ["Pick 10 objects", ".PROGRAM PICK10\n  SPEED 60\n  OPENI\n  POINT DROP = -150,-190,40\n  SET COUNT = 0\nNEXT:\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  APPRO DROP, 60\n  MOVES DROP\n  OPENI\n  DEPART 60\n  SHIFT P1 BY 40,0,0\n  SHIFT DROP BY 40,0,0\n  SET COUNT = COUNT + 1\n  IF COUNT < 10 JUMP NEXT\n  TYPE \"Picked \", COUNT\n  MOVE HOME\n.END"], "stack": ["Pick & Stack", ".PROGRAM STACK\n  SPEED 60\n  POINT STK = 100,-190,40\n  SET N = 0\nNEXT:\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  APPRO STK, 60\n  MOVES STK\n  OPENI\n  DEPART 60\n  SHIFT P1 BY 40,0,0\n  SHIFT STK BY 0,0,30\n  SET N = N + 1\n  TYPE \"Stacked \", N\n  IF N < 4 JUMP NEXT\n  MOVE HOME\n.END"], "appro": ["Approach / Depart", ".PROGRAM APPRODEPART\n  SPEED 40\n  MOVE HOME\n  APPRO P1, 80\n  APPRO P1, 40\n  MOVES P1\n  WAIT 0.5\n  DEPART 40\n  DEPART 80\n  APPRO P2, 60\n  MOVES P2\n  DEPART 60\n  MOVE HOME\n.END"], "motion": ["Motion commands", ".PROGRAM MOTION\n  READY\n  SPEED 20\n  MOVE P1\n  SPEED 80\n  MOVES P2\n  SPEED 40\n  MOVE P3\n  MOVES P4\n  DRIVE J1, 30\n  STATUS\n  MOVE HOME\n.END"], "teach": ["Teach with HERE", ".PROGRAM TEACH\n  MOVE P3\n  HERE TAUGHT1\n  DEPART 60\n  TYPE TAUGHT1\n  MOVE P4\n  HERE TAUGHT2\n  TYPE TAUGHT2\n  MOVE HOME\n  MOVE TAUGHT1\n  MOVE TAUGHT2\n  MOVE HOME\n.END"], "io": ["I/O & SIGNAL", ".PROGRAM IOTEST\n  SIGNAL 1\n  MOVE P1\n  SIGNAL 2\n  WAIT 1\n  SIGNAL -1\n  MOVE P2\n  SIGNAL 3\n  WAIT 1\n  SIGNAL -2\n  SIGNAL -3\n  SIGNAL 4\n  MOVE HOME\n.END"], "cond": ["Conditional", ".PROGRAM COND\n  SET MODE = 2\n  IF MODE = 1 JUMP A\n  IF MODE = 2 JUMP B\n  TYPE \"Unknown mode\"\n  JUMP DONE\nA:\n  TYPE \"Mode 1: left\"\n  MOVE P1\n  JUMP DONE\nB:\n  TYPE \"Mode 2: right\"\n  MOVE P2\nDONE:\n  MOVE HOME\n.END"], "vision": ["Vision sequence", ".PROGRAM VISION\n  MOVE P3\n  SIGNAL 1\n  WAIT 0.5\n  SIGNAL -1\n  SET VX = 90\n  SET VY = 190\n  TYPE \"Vision found part at \", VX, \",\", VY\n  POINT PART = VX, VY, 40\n  SPEED 50\n  APPRO PART, 60\n  MOVES PART\n  CLOSEI\n  DEPART 60\n  MOVE P4\n  OPENI\n  MOVE HOME\n.END"], "counter": ["Counter / loop", ".PROGRAM COUNTER\n  SET I = 1\n  SET SUM = 0\nLOOP:\n  SET SUM = SUM + I\n  TYPE \"I=\", I, \"  SUM=\", SUM\n  SET I = I + 1\n  IF I <= 5 JUMP LOOP\n  TYPE \"Total \", SUM\n.END"], "grip": ["Gripper", ".PROGRAM GRIPPER\n  SPEED 50\n  OPENI\n  APPRO P1, 60\n  MOVES P1\n  STATUS\n  CLOSEI\n  STATUS\n  WAIT 1\n  DEPART 60\n  MOVE P3\n  OPENI\n  STATUS\n  MOVE HOME\n.END"], "wst": ["WAIT / STATUS / TYPE", ".PROGRAM WST\n  TYPE \"Start\"\n  STATUS\n  MOVE P1\n  TYPE P1\n  SET T = 2\n  TYPE \"Waiting \", T, \" s\"\n  WAIT T\n  STATUS\n  TYPE \"Done\"\n  MOVE HOME\n.END"]};
-EXAMPLES.sig=["External signal",".PROGRAM EXTSIG\n  TYPE \"Waiting for IN 1 (press the IN 1 button)\"\n  WAIT SIG(1)\n  TYPE \"Part present - picking\"\n  SPEED 60\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  SIGNAL 1\n  TYPE \"Waiting for IN 2 (release request)\"\n  WAIT SIG(2)\n  MOVE P3\n  OPENI\n  SIGNAL -1\n  IF SIG(3) JUMP SKIP\n  TYPE \"IN 3 was OFF - normal end\"\nSKIP:\n  MOVE HOME\n.END"];
-EXAMPLES.pallet=["Palletizing",".PROGRAM PALLET\n  SPEED 70\n  OPENI\n  POINT PAL = -60,-200,40\n  SET COUNT = 0\n  SET COL = 0\n  SET ROW = 0\nNEXT:\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  APPRO PAL, 60\n  MOVES PAL\n  OPENI\n  DEPART 60\n  SHIFT P1 BY 40,0,0\n  SET COUNT = COUNT + 1\n  SHIFT PAL BY 40,0,0\n  SET COL = COL + 1\n  IF COL < 3 JUMP CHK\n  SHIFT PAL BY -120,40,0\n  SET COL = 0\n  SET ROW = ROW + 1\n  IF ROW < 2 JUMP CHK\n  SHIFT PAL BY 0,-80,30\n  SET ROW = 0\nCHK:\n  TYPE \"Placed \", COUNT, \" of 10\"\n  IF COUNT < 10 JUMP NEXT\n  MOVE HOME\n.END"];
-function loadExample(k){cd.value=EXAMPLES[k][1];resetSim();parseProgram();cd.scrollTop=0}
-document.getElementById("exbtn").innerHTML=Object.entries(EXAMPLES).map(([k,v])=>`<button onclick="loadExample('${k}')">${v[0]}</button>`).join("");
+const EXAMPLES={"pick": ["Pick 10 objects", ".PROGRAM PICK10\n  SPEED 5\n  OPENI\n  POINT DROP = -150,-190,40\n  SET COUNT = 0\nNEXT:\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  APPRO DROP, 60\n  MOVES DROP\n  OPENI\n  DEPART 60\n  SHIFT P1 BY 40,0,0\n  SHIFT DROP BY 40,0,0\n  SET COUNT = COUNT + 1\n  IF COUNT < 10 JUMP NEXT\n  TYPE \"Picked \", COUNT\n  MOVE HOME\n.END"], "stack": ["Pick & Stack", ".PROGRAM STACK\n  SPEED 5\n  POINT STK = 100,-190,40\n  SET N = 0\nNEXT:\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  APPRO STK, 60\n  MOVES STK\n  OPENI\n  DEPART 60\n  SHIFT P1 BY 40,0,0\n  SHIFT STK BY 0,0,30\n  SET N = N + 1\n  TYPE \"Stacked \", N\n  IF N < 4 JUMP NEXT\n  MOVE HOME\n.END"], "appro": ["Approach / Depart", ".PROGRAM APPRODEPART\n  SPEED 5\n  OPENI\n  MOVE HOME\n  APPRO P1, 80\n  APPRO P1, 40\n  MOVES P1\n  CLOSEI\n  WAIT 0.5\n  DEPART 40\n  DEPART 80\n  APPRO P3, 60\n  MOVES P3\n  OPENI\n  DEPART 60\n  MOVE HOME\n.END"], "motion": ["Motion commands", ".PROGRAM MOTION\n  READY\n  SPEED 5\n  OPENI\n  MOVE P1\n  CLOSEI\n  DEPART 60\n  SPEED 5\n  MOVES P2\n  OPENI\n  SPEED 5\n  MOVE P3\n  DRIVE J1, 30\n  STATUS\n  MOVE HOME\n.END"], "teach": ["Teach with HERE", ".PROGRAM TEACH\n  SPEED 5\n  OPENI\n  MOVE P1\n  HERE TAUGHT1\n  CLOSEI\n  DEPART 60\n  TYPE TAUGHT1\n  MOVE P4\n  HERE TAUGHT2\n  OPENI\n  TYPE TAUGHT2\n  MOVE HOME\n  MOVE TAUGHT1\n  MOVE TAUGHT2\n  MOVE HOME\n.END"], "io": ["I/O & SIGNAL", ".PROGRAM IOTEST\n  SPEED 5\n  OPENI\n  SIGNAL 1\n  MOVE P1\n  CLOSEI\n  SIGNAL 2\n  DEPART 60\n  WAIT 1\n  SIGNAL -1\n  MOVE P3\n  OPENI\n  SIGNAL 3\n  WAIT 1\n  SIGNAL -2\n  SIGNAL -3\n  SIGNAL 4\n  MOVE HOME\n.END"], "cond": ["Conditional", ".PROGRAM COND\n  SPEED 5\n  OPENI\n  SET MODE = 2\n  IF MODE = 1 JUMP A\n  IF MODE = 2 JUMP B\n  TYPE \"Unknown mode\"\n  JUMP DONE\nA:\n  TYPE \"Mode 1: pick from P1\"\n  MOVE P1\n  CLOSEI\n  DEPART 60\n  MOVE P3\n  OPENI\n  JUMP DONE\nB:\n  TYPE \"Mode 2: pick from P2\"\n  MOVE P2\n  CLOSEI\n  DEPART 60\n  MOVE P4\n  OPENI\nDONE:\n  MOVE HOME\n.END"], "vision": ["Vision sequence", ".PROGRAM VISION\n  MOVE P3\n  SIGNAL 1\n  WAIT 0.5\n  SIGNAL -1\n  SET VX = 90\n  SET VY = 190\n  TYPE \"Vision found part at \", VX, \",\", VY\n  POINT PART = VX, VY, 40\n  SPEED 5\n  APPRO PART, 60\n  MOVES PART\n  CLOSEI\n  DEPART 60\n  MOVE P4\n  OPENI\n  MOVE HOME\n.END"], "counter": ["Counter / loop", ".PROGRAM COUNTER\n  SET I = 1\n  SET SUM = 0\nLOOP:\n  SET SUM = SUM + I\n  TYPE \"I=\", I, \"  SUM=\", SUM\n  SET I = I + 1\n  IF I <= 5 JUMP LOOP\n  TYPE \"Total \", SUM\n.END"], "grip": ["Gripper", ".PROGRAM GRIPPER\n  SPEED 5\n  OPENI\n  APPRO P1, 60\n  MOVES P1\n  STATUS\n  CLOSEI\n  STATUS\n  WAIT 1\n  DEPART 60\n  MOVE P3\n  OPENI\n  STATUS\n  MOVE HOME\n.END"], "wst": ["WAIT / STATUS / TYPE", ".PROGRAM WST\n  SPEED 5\n  TYPE \"Start\"\n  STATUS\n  OPENI\n  MOVE P1\n  CLOSEI\n  TYPE P1\n  SET T = 2\n  TYPE \"Waiting \", T, \" s\"\n  WAIT T\n  STATUS\n  DEPART 60\n  MOVE P3\n  OPENI\n  TYPE \"Done\"\n  MOVE HOME\n.END"]};
+EXAMPLES.sig=["External signal",".PROGRAM EXTSIG\n  TYPE \"Waiting for IN 1 (press the IN 1 button)\"\n  WAIT SIG(1)\n  TYPE \"Part present - picking\"\n  SPEED 5\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  SIGNAL 1\n  TYPE \"Waiting for IN 2 (release request)\"\n  WAIT SIG(2)\n  MOVE P3\n  OPENI\n  SIGNAL -1\n  IF SIG(3) JUMP SKIP\n  TYPE \"IN 3 was OFF - normal end\"\nSKIP:\n  MOVE HOME\n.END"];
+EXAMPLES.pallet=["Palletizing",".PROGRAM PALLET\n  SPEED 5\n  OPENI\n  POINT PAL = -60,-200,40\n  SET COUNT = 0\n  SET COL = 0\n  SET ROW = 0\nNEXT:\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  APPRO PAL, 60\n  MOVES PAL\n  OPENI\n  DEPART 60\n  SHIFT P1 BY 40,0,0\n  SET COUNT = COUNT + 1\n  SHIFT PAL BY 40,0,0\n  SET COL = COL + 1\n  IF COL < 3 JUMP CHK\n  SHIFT PAL BY -120,40,0\n  SET COL = 0\n  SET ROW = ROW + 1\n  IF ROW < 2 JUMP CHK\n  SHIFT PAL BY 0,-80,30\n  SET ROW = 0\nCHK:\n  TYPE \"Placed \", COUNT, \" of 10\"\n  IF COUNT < 10 JUMP NEXT\n  MOVE HOME\n.END"];
+function loadExample(k){cd.value=EXAMPLES[k][1];resetSim();parseProgram();cd.scrollTop=0;document.querySelectorAll('#exbtn button').forEach(b=>b.classList.toggle('sel',b.dataset.k===k))}
+document.getElementById("exbtn").innerHTML=Object.entries(EXAMPLES).map(([k,v])=>`<button data-k="${k}" onclick="loadExample('${k}')">${v[0]}</button>`).join("");
 document.getElementById("inbtn").innerHTML='<b style="font-size:12px;align-self:center">External signals:</b>'+[1,2,3,4].map(n=>`<button id="in${n}" onclick="toggleIn(${n})">IN ${n}</button>`).join("");
-resize();renderLocations();lamps();ui();
+resize();loadExample('pick');lamps();ui();
 </script>
 </body>
 </html>
