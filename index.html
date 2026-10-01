@@ -41,12 +41,15 @@ input{width:100%;padding:6px;border:1px solid #ccd3de;border-radius:5px}
 .ed textarea{position:absolute;inset:0;height:100%;background:transparent;line-height:22px;white-space:pre;overflow:auto}
 .ex{padding:0 10px 8px;display:flex;flex-wrap:wrap;gap:5px}.ex button{font-size:12px;padding:5px 8px}
 .lamp{display:inline-block;width:15px;height:15px;line-height:15px;border-radius:50%;background:#c5ccd6;text-align:center;font-size:9px;margin-left:2px}.lamp.on{background:#22c55e;color:#fff}
+.ex button.on{background:#17834b;color:#fff}
+#cmdinfo{flex:none;box-sizing:border-box;width:calc(100% - 20px);max-width:680px;margin:2px auto 8px;padding:8px 12px;border-radius:8px;background:#16202c;border:1px solid #2f4258;border-top:3px solid #5ea3ff;font-size:12.5px;line-height:1.45;color:#d5e0ee;min-height:58px;text-align:center}
+#cmdinfo b{color:#7dd3a0;font-size:11px;letter-spacing:.06em;margin-right:6px}#cmdinfo code{color:#8ec5ff;font-family:ui-monospace,Menlo,Consolas,monospace}
 </style>
 </head>
 <body>
 <header>
-  <h1>VAL Robot Simulator</h1>
-  <span>Developed by Santosh N. Bodake • Sharad Institute of Technology, Polytechnic, Yadrav</span>
+  <h1>VAL Robot Simulator — PUMA-style 6 DOF</h1>
+  <span>Offline educational simulator • VAL/VAL-II-style syntax</span>
 </header>
 
 <div class="app">
@@ -78,12 +81,14 @@ LOOP:
         <button class="red" onclick="resetSim()">Reset</button>
       </div>
       <div class="ex" id="exbtn"></div>
+      <div class="ex" id="inbtn"></div>
       <div id="msg"></div>
     </div>
   </section>
 
   <section class="panel center">
     <h2>Robot Simulation</h2>
+    <div id="cmdinfo"><span style="opacity:.7">Command description appears here while a program runs or steps.</span></div>
     <div class="robotbox">
       <canvas id="stage"></canvas>
     </div>
@@ -96,6 +101,7 @@ LOOP:
       <span class="badge">Z <b id="z">0</b></span>
       <span class="badge">Gripper: <b id="grip">OPEN</b></span>
       <span class="badge">OUT <span id="lamps"></span></span>
+      <span class="badge">IN <span id="ilamps"></span></span>
     </div>
   </section>
 
@@ -125,6 +131,8 @@ LOOP:
       <code>HERE P1</code> — teach current robot position<br>
       <code>OPENI / CLOSEI</code> — gripper open/close<br>
       <code>WAIT 1</code> — wait seconds<br>
+      <code>WAIT SIG(1)</code> / <code>WAIT SIG(-1)</code> — wait until external input 1 is ON / OFF (use the IN buttons)<br>
+      <code>IF SIG(2) JUMP LBL</code> — branch on an input<br>
       <code>SET COUNT = COUNT + 1</code> — variable assignment<br>
       <code>IF COUNT &lt; 10 JUMP LOOP</code> — conditional jump<br>
       <code>JUMP LOOP</code> — unconditional jump<br>
@@ -156,7 +164,7 @@ let locations={
  P4:{x:130,y:-120,z:60,rx:0,ry:180,rz:0}
 };
 const mkObjs=()=>Array.from({length:10},(_,i)=>({x:-150+40*i,y:80,z:18,visible:true,held:false}));
-let objects=mkObjs(),held=null,outs=[0,0,0,0];
+let objects=mkObjs(),held=null,outs=[0,0,0,0],ins=[0,0,0,0],gv=1,lastTh=0;
 const baseLoc=JSON.parse(JSON.stringify(locations));
 
 function resize(){canvas.width=canvas.clientWidth*devicePixelRatio;canvas.height=canvas.clientHeight*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);draw()}
@@ -168,13 +176,27 @@ function P(x,y,z){const w=canvas.clientWidth,h=canvas.clientHeight,k=cam.zoom*Ma
  const d=Y*cp-z*sp,u=Y*sp+z*cp,f=1000/(1000+d);return{x:w/2+X*f*k,y:h*.6-u*f*k,s:f*k,d}}
 function seg(a,b,w,col,dash){ctx.lineCap="round";ctx.lineWidth=w;ctx.strokeStyle=col;ctx.setLineDash(dash||[]);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.setLineDash([])}
 function dot(p,r,col){ctx.fillStyle=col;ctx.beginPath();ctx.arc(p.x,p.y,r,0,7);ctx.fill()}
-function cube(o){const a=14,v=[];for(let i=0;i<8;i++)v.push(P(o.x+(i&1?a:-a),o.y+(i&2?a:-a),o.z+(i&4?a:-a)));
- [[0,1,3,2,.7],[4,5,7,6,1.15],[0,1,5,4,.9],[2,3,7,6,.85],[0,2,6,4,.8],[1,3,7,5,.95]].map(f=>({f,d:(v[f[0]].d+v[f[2]].d)/2})).sort((p,q)=>q.d-p.d).forEach(({f})=>{
-  ctx.fillStyle=`rgb(${Math.min(255,224*f[4])|0},${Math.min(255,155*f[4])|0},${Math.min(255,37*f[4])|0})`;ctx.strokeStyle="#7a4a08";ctx.lineWidth=1;ctx.beginPath();
+function box(x,y,z,a,b,c,rgb,th){const cs=Math.cos(th||0),sn=Math.sin(th||0),v=[];
+ for(let i=0;i<8;i++){const u=i&1?a:-a,w=i&2?b:-b;v.push(P(x+u*cs-w*sn,y+u*sn+w*cs,z+(i&4?c:-c)))}
+ [[0,1,3,2,.6],[4,5,7,6,1.12],[0,1,5,4,.85],[2,3,7,6,.8],[0,2,6,4,.7],[1,3,7,5,.95]].map(f=>({f,d:(v[f[0]].d+v[f[2]].d)/2})).sort((p,q)=>q.d-p.d).forEach(({f})=>{
+  const k=f[4];ctx.fillStyle=`rgb(${Math.min(255,rgb[0]*k)|0},${Math.min(255,rgb[1]*k)|0},${Math.min(255,rgb[2]*k)|0})`;ctx.strokeStyle="rgba(0,0,0,.35)";ctx.lineWidth=1;ctx.beginPath();
   ctx.moveTo(v[f[0]].x,v[f[0]].y);for(let i=1;i<4;i++)ctx.lineTo(v[f[i]].x,v[f[i]].y);ctx.closePath();ctx.fill();ctx.stroke()})}
+function cylv(x,y,z0,z1,r,rgb){const N=24,B=[],T=[],q=[];for(let i=0;i<N;i++){const a=i/N*6.2832,px=x+r*Math.cos(a),py=y+r*Math.sin(a);B.push(P(px,py,z0));T.push(P(px,py,z1))}
+ for(let i=0;i<N;i++){const j=(i+1)%N;q.push({i,j,d:(B[i].d+B[j].d)/2,f:.62+.38*Math.cos((i+.5)/N*6.2832-2.2)})}
+ q.sort((a,b)=>b.d-a.d).forEach(({i,j,f})=>{ctx.fillStyle=ctx.strokeStyle=`rgb(${rgb[0]*f|0},${rgb[1]*f|0},${rgb[2]*f|0})`;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(B[i].x,B[i].y);ctx.lineTo(B[j].x,B[j].y);ctx.lineTo(T[j].x,T[j].y);ctx.lineTo(T[i].x,T[i].y);ctx.closePath();ctx.fill();ctx.stroke()});
+ ctx.fillStyle=`rgb(${Math.min(255,rgb[0]*1.15)|0},${Math.min(255,rgb[1]*1.15)|0},${Math.min(255,rgb[2]*1.15)|0})`;ctx.beginPath();T.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fill()}
+function hub(p,r,col){const g=ctx.createRadialGradient(p.x-r*.35,p.y-r*.35,r*.1,p.x,p.y,r);g.addColorStop(0,"#9aa7b8");g.addColorStop(1,col);ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,r,0,7);ctx.fill()}
+function link(a,b,w1,w2,fill,edge){const dx=b.x-a.x,dy=b.y-a.y,L=Math.hypot(dx,dy)||1,nx=-dy/L,ny=dx/L;
+ const sh=(e,c)=>{const h1=w1*a.s/2+e,h2=w2*b.s/2+e;ctx.fillStyle=c;ctx.beginPath();ctx.moveTo(a.x+nx*h1,a.y+ny*h1);ctx.lineTo(b.x+nx*h2,b.y+ny*h2);ctx.lineTo(b.x-nx*h2,b.y-ny*h2);ctx.lineTo(a.x-nx*h1,a.y-ny*h1);ctx.closePath();ctx.fill();dot(a,h1,c);dot(b,h2,c)};
+ sh(1.5,edge);sh(0,fill);const o=.22;seg({x:a.x+nx*w1*a.s*o,y:a.y+ny*w1*a.s*o},{x:b.x+nx*w2*b.s*o,y:b.y+ny*w2*b.s*o},Math.max(2,w2*b.s*.16),"rgba(255,255,255,.65)");
+ seg({x:a.x-nx*w1*a.s*.3,y:a.y-ny*w1*a.s*.3},{x:b.x-nx*w2*b.s*.3,y:b.y-ny*w2*b.s*.3},Math.max(2,w2*b.s*.18),"rgba(0,0,0,.12)")}
+function armPose(){const r=Math.hypot(robot.x,robot.y);if(r>6)lastTh=Math.atan2(robot.y,robot.x);const th=lastTh,c=Math.cos(th),s=Math.sin(th),H=130,L1=190,L2=190;
+ const rr=robot.x*c+robot.y*s,dz=robot.z+50-H;let d=Math.hypot(rr,dz);d=Math.min(Math.max(d,30),L1+L2-2);
+ const a=Math.atan2(dz,rr),b=Math.acos(Math.max(-1,Math.min(1,(L1*L1+d*d-L2*L2)/(2*L1*d)))),g=a+b;
+ return{th,c,s,H,er:L1*Math.cos(g),ez:H+L1*Math.sin(g),wr:d*Math.cos(a),wz:H+d*Math.sin(a)}}
 function draw(){
  const w=canvas.clientWidth,h=canvas.clientHeight;ctx.clearRect(0,0,w,h);
- objects.forEach(o=>{if(o.held){o.x=robot.x;o.y=robot.y;o.z=robot.z-22}});
+ objects.forEach(o=>{if(o.held){o.x=robot.x;o.y=robot.y;o.z=robot.z-18}});
  // floor
  ctx.fillStyle="#cfd6df";ctx.beginPath();[[-300,-250],[300,-250],[300,250],[-300,250]].forEach(([x,y],i)=>{const q=P(x,y,0);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y)});ctx.closePath();ctx.fill();
  for(let x=-300;x<=300;x+=50)seg(P(x,-250,0),P(x,250,0),1,"#aeb7c2");
@@ -184,14 +206,21 @@ function draw(){
  Object.values(locations).forEach(l=>{const a=P(l.x,l.y,l.z),b=P(l.x,l.y,0);seg(a,b,1,"rgba(210,30,30,.55)",[3,3]);ctx.strokeStyle="rgba(210,30,30,.6)";ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(b.x,b.y,6*b.s,3*b.s,0,0,7);ctx.stroke()});
  // shadow + objects
  const sh=P(robot.x,robot.y,0);ctx.fillStyle="rgba(0,0,0,.25)";ctx.beginPath();ctx.ellipse(sh.x,sh.y,15*sh.s,7*sh.s,0,0,7);ctx.fill();
- objects.filter(o=>o.visible).map(o=>({o,d:P(o.x,o.y,o.z).d})).sort((a,b)=>b.d-a.d).forEach(({o})=>cube(o));
+ const OC=[224,155,37];
+ objects.filter(o=>o.visible&&!o.held).map(o=>({o,d:P(o.x,o.y,o.z).d})).sort((a,b)=>b.d-a.d).forEach(({o})=>box(o.x,o.y,o.z,14,14,14,OC,0));
  if(target){const q=P(target.x,target.y,target.z);ctx.strokeStyle="#1769d1";ctx.lineWidth=2;ctx.setLineDash([5,5]);ctx.beginPath();ctx.arc(q.x,q.y,12*q.s,0,7);ctx.stroke();ctx.setLineDash([])}
- // robot
- const p0=P(0,0,30),p1=P(robot.x*.45,robot.y*.45,110),p2=P(robot.x*.8,robot.y*.8,robot.z*.75),p3=P(robot.x,robot.y,robot.z);
- seg(o0,p0,46*o0.s,"#5d6672");seg(p0,p1,20*p0.s,"#707985");seg(p1,p2,16*p1.s,"#9aa3ad");seg(p2,p3,11*p2.s,"#606a76");
- [p0,p1,p2,p3].forEach(p=>dot(p,7*p.s,"#353d48"));
- const fx=robot.grip?5:11,gc=robot.grip?"#c93636":"#17834b";seg(p3,P(robot.x,robot.y,robot.z-12),4*p3.s,"#222");
- [-fx,fx].forEach(d=>seg(P(robot.x+d,robot.y,robot.z-12),P(robot.x+d,robot.y,robot.z-28),3*p3.s,gc));
+ // manipulator: pedestal, turret, shoulder, upper arm, elbow, forearm, wrist
+ cylv(0,0,0,24,66,[62,70,82]);cylv(0,0,24,112,44,[206,213,222]);cylv(0,0,112,122,50,[62,70,82]);
+ const A=armPose(),W=(r,z)=>P(r*A.c,r*A.s,z),S0=W(0,A.H),EL=W(A.er,A.ez),WR=W(A.wr,A.wz);
+ link(S0,EL,50,38,"#eef1f5","#6f7a88");hub(S0,27*S0.s,"#38414d");
+ link(EL,WR,38,26,"#e2e7ed","#6f7a88");hub(EL,21*EL.s,"#38414d");hub(WR,15*WR.s,"#38414d");
+ // end effector: flange + parallel-jaw gripper
+ const tx=A.wr*A.c,ty=A.wr*A.s,tz=A.wz-50,cg=held?14:4,inner=cg+gv*(24-cg);
+ seg(P(tx,ty,tz+36),WR,10*WR.s,"#59636f");cylv(tx,ty,tz+20,tz+36,15,[70,78,92]);
+ box(tx,ty,tz+7,11,29,13,[104,114,130],A.th);
+ const J=[-1,1].map(g=>{const o=g*(inner+4);return{x:tx-o*A.s,y:ty+o*A.c,g}}).map(j=>({...j,d:P(j.x,j.y,tz-18).d})).sort((a,b)=>b.d-a.d);
+ const jaw=j=>{box(j.x,j.y,tz-18,8,4,12,[168,176,188],A.th);box(j.x-j.g*3.5*A.s*-1*0,j.y,tz-8,8,4.5,3,[70,78,92],A.th)};
+ jaw(J[0]);objects.filter(o=>o.visible&&o.held).forEach(o=>box(o.x,o.y,o.z,14,14,14,OC,0));jaw(J[1]);
  // recorded points: red dots + labels (drawn last, on top)
  ctx.font="bold 13px Arial";ctx.lineJoin="round";
  Object.entries(locations).forEach(([n,l])=>{const q=P(l.x,l.y,l.z);dot(q,6.5*Math.max(.7,q.s),"#e11d1d");ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(q.x,q.y,6.5*Math.max(.7,q.s),0,7);ctx.stroke();
@@ -225,14 +254,49 @@ function renderLocations(){
 function log(s){let el=document.getElementById("historyText");el.textContent+=s+"\n";el.scrollTop=el.scrollHeight}
 function msg(s,kind=""){let e=document.getElementById("msg");e.textContent=s;e.className=kind}
 
+const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const fmtL=n=>{const l=getLoc(n);return n.toUpperCase()+(l?" (X "+Math.round(l.x)+", Y "+Math.round(l.y)+", Z "+Math.round(l.z)+")":" (not defined yet)")};
+const DESC=[
+[/^\.PROGRAM\s*(\w*)/i,m=>"Program header"+(m[1]?" '"+m[1]+"'":"")+" - marks where the program starts."],
+[/^\.END/i,()=>"End-of-program marker."],
+[/^(?:LABEL\s+(\w+)|(\w+):)$/i,m=>"Label '"+(m[1]||m[2])+"' - a jump target. Nothing moves; execution continues with the next line."],
+[/^MOVES\s+(\w+)/i,m=>"Straight-line move: the tool tip travels in a straight line to "+fmtL(m[1])+"."],
+[/^MOVE\s+(\w+)/i,m=>"Joint-interpolated move of the tool tip to "+fmtL(m[1])+" (the path is not a straight line)."],
+[/^APPRO\s+(\w+)\s*,\s*(-?[\d.]+)/i,m=>"Approach: move to a point "+m[2]+" mm above "+fmtL(m[1])+", ready to descend onto it."],
+[/^DEPART\s+(-?[\d.]+)/i,m=>"Depart: lift the tool "+m[1]+" mm straight up from the current position."],
+[/^SPEED\s+([\d.]+)/i,m=>"Set robot speed to "+m[1]+"% of maximum for the following moves."],
+[/^DRIVE\s+J([1-6])\s*,?\s*(-?[\d.]+)?/i,m=>"Drive single joint J"+m[1]+(m[2]?" with value "+m[2]+" (degrees)":"")+"."],
+[/^OPENI?\b/i,()=>"Open the gripper jaws; a held part is released and drops onto the surface below."],
+[/^CLOSEI?\b/i,()=>"Close the gripper jaws; a part is gripped if the tool tip is at the part."],
+[/^WAIT\s+SIG\s*\(?\s*(-?\d+)/i,m=>"Wait for external signal: the program halts until input "+Math.abs(m[1])+" is "+(+m[1]>0?"ON":"OFF")+" (use the IN buttons)."],
+[/^WAIT\s+(.+)/i,m=>"Wait "+m[1]+" second(s) before the next command."],
+[/^SET\s+(\w+)\s*=\s*(.+)/i,m=>"Store the value of '"+m[2]+"' in variable "+m[1].toUpperCase()+"."],
+[/^HERE\s+(\w+)/i,m=>"Teach point: record the robot's current position as "+m[1].toUpperCase()+"."],
+[/^SIGNAL\s+(-?\d+)/i,m=>"Switch output "+Math.abs(m[1])+(+m[1]>0?" ON":" OFF")+" (negative number = OFF)."],
+[/^POINT\s+(\w+)\s*=\s*(.+)/i,m=>"Define point "+m[1].toUpperCase()+" at ("+m[2]+") mm."],
+[/^SHIFT\s+(\w+)\s+BY\s+(.+)/i,m=>"Offset recorded point "+m[1].toUpperCase()+" by ("+m[2]+") mm - used to step along a row or pallet."],
+[/^STATUS$/i,()=>"Print the robot status (position, gripper, speed) to the history log."],
+[/^READY$/i,()=>"Move the robot to its READY pose."],
+[/^TYPE\s+(.+)/i,()=>"Print text, variable values or a point's coordinates to the history log."],
+[/^PAUSE$/i,()=>"Pause program execution until it is resumed."],
+[/^ABORT$/i,()=>"Abort the program immediately."],
+[/^IF\s+(.+?)\s+JUMP\s+(\w+)/i,m=>"Condition: if ("+m[1]+") is true, jump to label "+m[2]+"; otherwise continue with the next line."],
+[/^JUMP\s+(\w+)/i,m=>"Unconditional jump to label "+m[1]+"."],
+[/^NOOP$/i,()=>"No operation."]];
+function showInfo(n,kind){const el=document.getElementById("cmdinfo");
+ if(n<0){el.innerHTML='<span style="opacity:.7">Command description appears here while a program runs or steps.</span>';return}
+ const txt=(cd.value.split("\n")[n]||"").trim(),e=DESC.find(x=>x[0].test(txt)),d=e?e[1](txt.match(e[0])):"";
+ el.innerHTML="<b>"+(kind==="next"?"NEXT":"EXECUTING")+"</b><code>"+esc(txt)+"</code><br>"+esc(d)}
 const cd=document.getElementById("code"),bar=document.getElementById("bar");let hiLine=-1;cd.setAttribute("wrap","off");
 function placeBar(){if(hiLine<0){bar.style.display="none";return}bar.style.display="block";bar.style.top=(13+hiLine*22-cd.scrollTop)+"px"}
-function hi(n,kind){hiLine=n;bar.className=kind==="next"?"next":"";if(n>=0){const y=13+n*22,h=cd.clientHeight;if(y<cd.scrollTop+22||y>cd.scrollTop+h-44)cd.scrollTop=Math.max(0,y-h/2)}placeBar()}
+function hi(n,kind){showInfo(n,kind);hiLine=n;bar.className=kind==="next"?"next":"";if(n>=0){const y=13+n*22,h=cd.clientHeight;if(y<cd.scrollTop+22||y>cd.scrollTop+h-44)cd.scrollTop=Math.max(0,y-h/2)}placeBar()}
 cd.addEventListener("scroll",placeBar);
-function lamps(){document.getElementById("lamps").innerHTML=outs.map((v,i)=>`<span class="lamp${v?" on":""}">${i+1}</span>`).join("")}
+function lamps(){const L=a=>a.map((v,i)=>`<span class="lamp${v?" on":""}">${i+1}</span>`).join("");document.getElementById("lamps").innerHTML=L(outs);document.getElementById("ilamps").innerHTML=L(ins);ins.forEach((v,i)=>{const b=document.getElementById("in"+(i+1));if(b)b.classList.toggle("on",!!v)})}
+function toggleIn(n){ins[n-1]^=1;lamps();log("INPUT "+n+(ins[n-1]?" ON":" OFF")+" (external)")}
+function gripTo(v){const a=gv,t0=performance.now();return new Promise(r=>{(function f(t){const q=Math.min(1,(t-t0)/250);gv=a+(v-a)*q;draw();q<1?requestAnimationFrame(f):r()})(t0)})}
 function grab(){if(held)return;let b=null,bd=1e9;objects.forEach(o=>{const d=Math.hypot(o.x-robot.x,o.y-robot.y);if(o.visible&&d<25&&Math.abs(o.z-robot.z)<35&&d<bd){b=o;bd=d}});if(b){b.held=true;held=b;log("Object gripped")}}
 function drop(){if(!held)return;const h=held;h.held=false;held=null;const n=objects.filter(o=>o!==h&&o.visible&&Math.hypot(o.x-h.x,o.y-h.y)<15).length;h.z=18+30*n;log("Object released"+(n?" (stacked on "+n+")":""))}
-function restore(){locations=JSON.parse(JSON.stringify(baseLoc));objects=mkObjs();held=null;outs=[0,0,0,0];lamps();renderLocations()}
+function restore(){gv=robot.grip?0:1;locations=JSON.parse(JSON.stringify(baseLoc));objects=mkObjs();held=null;outs=[0,0,0,0];lamps();renderLocations()}
 function edit(n,k,v){locations[n][k]=+v;baseLoc[n]=baseLoc[n]||{};baseLoc[n][k]=+v}
 function parseProgram(){
  const raw=document.getElementById("code").value.split(/\r?\n/);
@@ -252,7 +316,7 @@ function getLoc(name){
  return locations[name]||null;
 }
 function evalExpr(s){
- s=s.replace(/\bAND\b/gi,"&&").replace(/\bOR\b/gi,"||");s=s.replace(/([^<>=!])=(?!=)/g,"$1==");
+ s=s.replace(/\bAND\b/gi,"&&").replace(/\bOR\b/gi,"||");s=s.replace(/([^<>=!])=(?!=)/g,"$1==");s=s.replace(/\bSIG\s*\(\s*(-?\d+)\s*\)/gi,(_,n)=>+n>0?(ins[n-1]?1:0):(ins[-n-1]?0:1));
  Object.keys(vars).sort((a,b)=>b.length-a.length).forEach(k=>{s=s.replace(new RegExp("\\b"+k+"\\b","gi"),String(vars[k]))});
  if(!/^[0-9+\-*/().<>=!&| \t]+$/.test(s))throw Error("Invalid expression: "+s);
  return Function("return ("+s+")")();
@@ -281,8 +345,11 @@ async function execute(s){
  else if((m=s.match(/^DEPART\s+(-?[\d.]+)/i))){await moveTo({...robot,z:robot.z+Number(m[1])})}
  else if((m=s.match(/^SPEED\s+([\d.]+)/i))){robot.speed=Math.max(1,Math.min(100,Number(m[1])));log("SPEED = "+robot.speed)}
  else if((m=s.match(/^DRIVE\s+J([1-6])\s*,?\s*(-?[\d.]+)/i))){robot.j[Number(m[1])-1]=Number(m[2]);log("J"+m[1]+" = "+m[2])}
- else if(/^OPENI?\b/i.test(s)){robot.grip=false;drop();log("Gripper OPEN")}
- else if(/^CLOSEI?\b/i.test(s)){robot.grip=true;grab();log("Gripper CLOSE")}
+ else if(/^OPENI?\b/i.test(s)){robot.grip=false;drop();await gripTo(1);log("Gripper OPEN")}
+ else if(/^CLOSEI?\b/i.test(s)){robot.grip=true;grab();await gripTo(0);log("Gripper CLOSE")}
+ else if((m=s.match(/^WAIT\s+SIG\s*\(?\s*(-?\d+)\s*\)?\s*$/i))){const n=+m[1],i=Math.abs(n)-1;if(i<0||i>3)throw Error("Input must be 1-4");
+   if(!!ins[i]!==(n>0)){msg("Waiting for external signal IN "+Math.abs(n)+(n>0?" ON":" OFF")+" ...","warn");log("WAIT SIG("+n+") ...");
+    while((running||stepBusy)&&!!ins[i]!==(n>0))await new Promise(r=>setTimeout(r,50));msg("");log("Signal received")}}
  else if((m=s.match(/^WAIT\s+(.+)$/i))){await new Promise(r=>setTimeout(r,Number(evalExpr(m[1]))*1000))}
  else if((m=s.match(/^SET\s+([A-Za-z_]\w*)\s*=\s*(.+)$/i))){vars[m[1].toUpperCase()]=evalExpr(m[2]);log("SET "+m[1]+" = "+vars[m[1].toUpperCase()])}
  else if((m=s.match(/^HERE\s+(\w+)/i))){locations[m[1].toUpperCase()]={x:robot.x,y:robot.y,z:robot.z,rx:robot.rx,ry:robot.ry,rz:robot.rz};renderLocations();log("HERE "+m[1])}
@@ -339,8 +406,11 @@ function showTab(id,el){
  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));el.classList.add("active");
 }
 const EXAMPLES={"pick": ["Pick 10 objects", ".PROGRAM PICK10\n  SPEED 60\n  OPENI\n  POINT DROP = -150,-100,40\n  SET COUNT = 0\nNEXT:\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  APPRO DROP, 60\n  MOVES DROP\n  OPENI\n  DEPART 60\n  SHIFT P1 BY 40,0,0\n  SHIFT DROP BY 40,0,0\n  SET COUNT = COUNT + 1\n  IF COUNT < 10 JUMP NEXT\n  TYPE \"Picked \", COUNT\n  MOVE HOME\n.END"], "stack": ["Pick & Stack", ".PROGRAM STACK\n  SPEED 60\n  POINT STK = 100,-120,40\n  SET N = 0\nNEXT:\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  APPRO STK, 60\n  MOVES STK\n  OPENI\n  DEPART 60\n  SHIFT P1 BY 40,0,0\n  SHIFT STK BY 0,0,30\n  SET N = N + 1\n  TYPE \"Stacked \", N\n  IF N < 4 JUMP NEXT\n  MOVE HOME\n.END"], "appro": ["Approach / Depart", ".PROGRAM APPRODEPART\n  SPEED 40\n  MOVE HOME\n  APPRO P1, 80\n  APPRO P1, 40\n  MOVES P1\n  WAIT 0.5\n  DEPART 40\n  DEPART 80\n  APPRO P2, 60\n  MOVES P2\n  DEPART 60\n  MOVE HOME\n.END"], "motion": ["Motion commands", ".PROGRAM MOTION\n  READY\n  SPEED 20\n  MOVE P1\n  SPEED 80\n  MOVES P2\n  SPEED 40\n  MOVE P3\n  MOVES P4\n  DRIVE J1, 30\n  STATUS\n  MOVE HOME\n.END"], "teach": ["Teach with HERE", ".PROGRAM TEACH\n  MOVE P3\n  HERE TAUGHT1\n  DEPART 60\n  TYPE TAUGHT1\n  MOVE P4\n  HERE TAUGHT2\n  TYPE TAUGHT2\n  MOVE HOME\n  MOVE TAUGHT1\n  MOVE TAUGHT2\n  MOVE HOME\n.END"], "io": ["I/O & SIGNAL", ".PROGRAM IOTEST\n  SIGNAL 1\n  MOVE P1\n  SIGNAL 2\n  WAIT 1\n  SIGNAL -1\n  MOVE P2\n  SIGNAL 3\n  WAIT 1\n  SIGNAL -2\n  SIGNAL -3\n  SIGNAL 4\n  MOVE HOME\n.END"], "cond": ["Conditional", ".PROGRAM COND\n  SET MODE = 2\n  IF MODE = 1 JUMP A\n  IF MODE = 2 JUMP B\n  TYPE \"Unknown mode\"\n  JUMP DONE\nA:\n  TYPE \"Mode 1: left\"\n  MOVE P1\n  JUMP DONE\nB:\n  TYPE \"Mode 2: right\"\n  MOVE P2\nDONE:\n  MOVE HOME\n.END"], "vision": ["Vision sequence", ".PROGRAM VISION\n  MOVE P3\n  SIGNAL 1\n  WAIT 0.5\n  SIGNAL -1\n  SET VX = 90\n  SET VY = 80\n  TYPE \"Vision found part at \", VX, \",\", VY\n  POINT PART = VX, VY, 40\n  SPEED 50\n  APPRO PART, 60\n  MOVES PART\n  CLOSEI\n  DEPART 60\n  MOVE P4\n  OPENI\n  MOVE HOME\n.END"], "counter": ["Counter / loop", ".PROGRAM COUNTER\n  SET I = 1\n  SET SUM = 0\nLOOP:\n  SET SUM = SUM + I\n  TYPE \"I=\", I, \"  SUM=\", SUM\n  SET I = I + 1\n  IF I <= 5 JUMP LOOP\n  TYPE \"Total \", SUM\n.END"], "grip": ["Gripper", ".PROGRAM GRIPPER\n  SPEED 50\n  OPENI\n  APPRO P1, 60\n  MOVES P1\n  STATUS\n  CLOSEI\n  STATUS\n  WAIT 1\n  DEPART 60\n  MOVE P3\n  OPENI\n  STATUS\n  MOVE HOME\n.END"], "wst": ["WAIT / STATUS / TYPE", ".PROGRAM WST\n  TYPE \"Start\"\n  STATUS\n  MOVE P1\n  TYPE P1\n  SET T = 2\n  TYPE \"Waiting \", T, \" s\"\n  WAIT T\n  STATUS\n  TYPE \"Done\"\n  MOVE HOME\n.END"]};
+EXAMPLES.sig=["External signal",".PROGRAM EXTSIG\n  TYPE \"Waiting for IN 1 (press the IN 1 button)\"\n  WAIT SIG(1)\n  TYPE \"Part present - picking\"\n  SPEED 60\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  SIGNAL 1\n  TYPE \"Waiting for IN 2 (release request)\"\n  WAIT SIG(2)\n  MOVE P3\n  OPENI\n  SIGNAL -1\n  IF SIG(3) JUMP SKIP\n  TYPE \"IN 3 was OFF - normal end\"\nSKIP:\n  MOVE HOME\n.END"];
+EXAMPLES.pallet=["Palletizing",".PROGRAM PALLET\n  SPEED 70\n  OPENI\n  POINT PAL = -60,-150,40\n  SET COUNT = 0\n  SET COL = 0\n  SET ROW = 0\nNEXT:\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  APPRO PAL, 60\n  MOVES PAL\n  OPENI\n  DEPART 60\n  SHIFT P1 BY 40,0,0\n  SET COUNT = COUNT + 1\n  SHIFT PAL BY 40,0,0\n  SET COL = COL + 1\n  IF COL < 3 JUMP CHK\n  SHIFT PAL BY -120,40,0\n  SET COL = 0\n  SET ROW = ROW + 1\n  IF ROW < 2 JUMP CHK\n  SHIFT PAL BY 0,-80,30\n  SET ROW = 0\nCHK:\n  TYPE \"Placed \", COUNT, \" of 10\"\n  IF COUNT < 10 JUMP NEXT\n  MOVE HOME\n.END"];
 function loadExample(k){cd.value=EXAMPLES[k][1];resetSim();parseProgram();cd.scrollTop=0}
 document.getElementById("exbtn").innerHTML=Object.entries(EXAMPLES).map(([k,v])=>`<button onclick="loadExample('${k}')">${v[0]}</button>`).join("");
+document.getElementById("inbtn").innerHTML='<b style="font-size:12px;align-self:center">External signals:</b>'+[1,2,3,4].map(n=>`<button id="in${n}" onclick="toggleIn(${n})">IN ${n}</button>`).join("");
 resize();renderLocations();lamps();ui();
 </script>
 </body>
