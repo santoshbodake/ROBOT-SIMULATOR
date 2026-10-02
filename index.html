@@ -135,6 +135,9 @@ NEXT:
       <code>TYPE P1</code> — display location<br>
       <code>STATUS</code> — display robot status<br>
       <code>READY</code> — ready state<br>
+      <code>FOR I = 1 TO 5</code> … <code>ENDFOR</code> — counted loop (optional <code>STEP n</code>, may be nested)<br>
+      <code>FEED</code> — present next part at pickup point P1<br>
+      <code>PART BOLT</code> — part shape: CUBE, BOLT, PCB, BEARING<br>
       <code>ABORT</code> — stop program<br>
       <code>PAUSE</code> — pause program<br><br>
       <b>Program structure</b><br>
@@ -195,6 +198,12 @@ function box(x,y,z,a,b,c,rgb,th){const cs=Math.cos(th||0),sn=Math.sin(th||0),v=[
  [[0,1,3,2,.6],[4,5,7,6,1.12],[0,1,5,4,.85],[2,3,7,6,.8],[0,2,6,4,.7],[1,3,7,5,.95]].map(f=>({f,d:(v[f[0]].d+v[f[2]].d)/2})).sort((p,q)=>q.d-p.d).forEach(({f})=>{
   const k=f[4];ctx.fillStyle=`rgb(${Math.min(255,rgb[0]*k)|0},${Math.min(255,rgb[1]*k)|0},${Math.min(255,rgb[2]*k)|0})`;ctx.strokeStyle="rgba(0,0,0,.35)";ctx.lineWidth=1;ctx.beginPath();
   ctx.moveTo(v[f[0]].x,v[f[0]].y);for(let i=1;i<4;i++)ctx.lineTo(v[f[i]].x,v[f[i]].y);ctx.closePath();ctx.fill();ctx.stroke()})}
+let partType="CUBE";
+function drawPart(o){const t=partType;
+ if(t==="BOLT"){box(o.x+5,o.y,o.z,11,4.5,4.5,[150,158,170],0);box(o.x-9,o.y,o.z,4,12,12,[96,104,118],0)}
+ else if(t==="PCB"){box(o.x,o.y,o.z-9,14,14,2.5,[24,120,70],0);box(o.x-4,o.y+4,o.z-6,4,4,1.6,[30,30,34],0);box(o.x+6,o.y-5,o.z-6,3,5,1.6,[30,30,34],0);box(o.x+1,o.y-11,o.z-6,9,2,0.8,[212,175,55],0)}
+ else if(t==="BEARING"){cylv(o.x,o.y,o.z-8,o.z+8,13,[170,178,190]);ctx.fillStyle="#2e3440";ctx.beginPath();for(let i=0;i<20;i++){const a=i/20*6.2832,p=P(o.x+6*Math.cos(a),o.y+6*Math.sin(a),o.z+8.2);i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)}ctx.closePath();ctx.fill()}
+ else box(o.x,o.y,o.z,14,14,14,[224,155,37],0)}
 function cylv(x,y,z0,z1,r,rgb){const N=24,B=[],T=[],q=[];for(let i=0;i<N;i++){const a=i/N*6.2832,px=x+r*Math.cos(a),py=y+r*Math.sin(a);B.push(P(px,py,z0));T.push(P(px,py,z1))}
  for(let i=0;i<N;i++){const j=(i+1)%N;q.push({i,j,d:(B[i].d+B[j].d)/2,f:.62+.38*Math.cos((i+.5)/N*6.2832-2.2)})}
  q.sort((a,b)=>b.d-a.d).forEach(({i,j,f})=>{ctx.fillStyle=ctx.strokeStyle=`rgb(${rgb[0]*f|0},${rgb[1]*f|0},${rgb[2]*f|0})`;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(B[i].x,B[i].y);ctx.lineTo(B[j].x,B[j].y);ctx.lineTo(T[j].x,T[j].y);ctx.lineTo(T[i].x,T[i].y);ctx.closePath();ctx.fill();ctx.stroke()});
@@ -221,7 +230,7 @@ function draw(){
  // shadow + objects
  const sh=P(robot.x,robot.y,0);ctx.fillStyle="rgba(0,0,0,.25)";ctx.beginPath();ctx.ellipse(sh.x,sh.y,15*sh.s,7*sh.s,0,0,7);ctx.fill();
  const OC=[224,155,37];
- objects.filter(o=>o.visible&&!o.held).map(o=>({o,d:P(o.x,o.y,o.z).d})).sort((a,b)=>b.d-a.d).forEach(({o})=>box(o.x,o.y,o.z,14,14,14,OC,0));
+ objects.filter(o=>o.visible&&!o.held).map(o=>({o,d:P(o.x,o.y,o.z).d})).sort((a,b)=>b.d-a.d).forEach(({o})=>drawPart(o));
  if(target){const q=P(target.x,target.y,target.z);ctx.strokeStyle="#1769d1";ctx.lineWidth=2;ctx.setLineDash([5,5]);ctx.beginPath();ctx.arc(q.x,q.y,12*q.s,0,7);ctx.stroke();ctx.setLineDash([])}
  // manipulator: pedestal, turret, shoulder, upper arm, elbow, forearm, wrist
  cylv(0,0,0,24,66,[62,70,82]);cylv(0,0,24,112,44,[206,213,222]);cylv(0,0,112,122,50,[62,70,82]);
@@ -235,7 +244,7 @@ function draw(){
  box(tx,ty,tz+7,11,29,13,[104,114,130],0);
  const J=[-1,1].map(g=>{const o=g*(inner+4);return{x:tx,y:ty+o,g}}).map(j=>({...j,d:P(j.x,j.y,tz-18).d})).sort((a,b)=>b.d-a.d);
  const jaw=j=>{box(j.x,j.y,tz-18,8,4,12,[168,176,188],0);box(j.x,j.y,tz-8,8,4.5,3,[70,78,92],0)};
- jaw(J[0]);objects.filter(o=>o.visible&&o.held).forEach(o=>box(o.x,o.y,o.z,14,14,14,OC,0));jaw(J[1]);
+ jaw(J[0]);objects.filter(o=>o.visible&&o.held).forEach(o=>drawPart(o));jaw(J[1]);
  // recorded points: red dots + labels (drawn last, on top)
  ctx.font="bold 13px Arial";ctx.lineJoin="round";
  Object.entries(locations).forEach(([n,l])=>{const q=P(l.x,l.y,l.z);dot(q,6.5*Math.max(.7,q.s),"#e11d1d");ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(q.x,q.y,6.5*Math.max(.7,q.s),0,7);ctx.stroke();
@@ -297,6 +306,10 @@ const DESC=[
 [/^ABORT$/i,()=>"Abort the program immediately."],
 [/^IF\s+(.+?)\s+JUMP\s+(\w+)/i,m=>"Condition: if ("+m[1]+") is true, jump to label "+m[2]+"; otherwise continue with the next line."],
 [/^JUMP\s+(\w+)/i,m=>"Unconditional jump to label "+m[1]+"."],
+[/^FOR\s+(\w+)\s*=\s*(.+?)\s+TO\s+(.+?)(?:\s+STEP\s+.+)?$/i,m=>"Loop: repeat the block down to ENDFOR with "+m[1].toUpperCase()+" counting from "+m[2]+" to "+m[3]+"."],
+[/^(ENDFOR|END\s+FOR)$/i,()=>"End of FOR loop: add the step to the counter and repeat the block, or continue after the loop when finished."],
+[/^FEED/i,()=>"Feeder: present the next unused part at the pickup point (P1), so every pick uses the same location."],
+[/^PART\s+(\w+)/i,m=>"Select the part type shown in the simulator: CUBE, BOLT, PCB or BEARING."],
 [/^NOOP$/i,()=>"No operation."]];
 function showInfo(n,kind){const el=document.getElementById("cmdinfo");
  if(n<0){el.innerHTML='<span style="opacity:.7">Command description appears here while a program runs or steps.</span>';return}
@@ -309,11 +322,13 @@ cd.addEventListener("scroll",placeBar);
 function lamps(){const L=a=>a.map((v,i)=>`<span class="lamp${v?" on":""}">${i+1}</span>`).join("");document.getElementById("lamps").innerHTML=L(outs);document.getElementById("ilamps").innerHTML=L(ins);ins.forEach((v,i)=>{const b=document.getElementById("in"+(i+1));if(b)b.classList.toggle("on",!!v)})}
 function toggleIn(n){ins[n-1]^=1;lamps();log("INPUT "+n+(ins[n-1]?" ON":" OFF")+" (external)")}
 function gripTo(v){const a=gv,t0=performance.now();return new Promise(r=>{(function f(t){const q=Math.min(1,(t-t0)/250);gv=a+(v-a)*q;draw();q<1?requestAnimationFrame(f):r()})(t0)})}
-function grab(){if(held)return;let b=null,bd=1e9;objects.forEach(o=>{const d=Math.hypot(o.x-robot.x,o.y-robot.y);if(o.visible&&d<25&&Math.abs(o.z-robot.z)<35&&d<bd){b=o;bd=d}});if(b){b.held=true;held=b;log("Object gripped")}else log("CLOSE: no object at tool tip (move down onto the part first)")}
+function grab(){if(held)return;let b=null,bd=1e9;objects.forEach(o=>{const d=Math.hypot(o.x-robot.x,o.y-robot.y);if(o.visible&&d<25&&Math.abs(o.z-robot.z)<35&&d<bd){b=o;bd=d}});if(b){b.held=true;b.done=true;held=b;log("Object gripped")}else log("CLOSE: no object at tool tip (move down onto the part first)")}
 function drop(){if(!held)return;const h=held;h.held=false;held=null;const n=objects.filter(o=>o!==h&&o.visible&&Math.hypot(o.x-h.x,o.y-h.y)<15).length;h.z=18+30*n;log("Object released"+(n?" (stacked on "+n+")":""))}
 function restore(){gv=robot.grip?0:1;locations=JSON.parse(JSON.stringify(baseLoc));objects=mkObjs();held=null;outs=[0,0,0,0];lamps();renderLocations()}
 function edit(n,k,v){locations[n][k]=+v;baseLoc[n]=baseLoc[n]||{};baseLoc[n][k]=+v}
+let loops={};
 function parseProgram(){
+ loops={};
  const raw=document.getElementById("code").value.split(/\r?\n/);
  lines=[];labels={};
  raw.forEach((text,i)=>{
@@ -323,6 +338,7 @@ function parseProgram(){
    else if(/^[A-Za-z_][\w]*:$/.test(s)){labels[s.slice(0,-1).toUpperCase()]=lines.length}
    lines.push({text:s,n:i});
  });
+ const st=[];lines.forEach((l,i)=>{if(/^FOR\s/i.test(l.text))st.push(i);else if(/^(ENDFOR|END\s+FOR)$/i.test(l.text)){const f=st.pop();if(f!==undefined){lines[f].end=i;l.start=f}}});
  return lines;
 }
 function getLoc(name){
@@ -375,6 +391,17 @@ async function execute(s){
  else if((m=s.match(/^SIGNAL\s+(-?\d+)/i))){const n=+m[1],i=Math.abs(n)-1;if(i>=0&&i<4){outs[i]=n>0?1:0;lamps()}log("SIGNAL "+Math.abs(n)+(n>0?" ON":" OFF"))}
  else if((m=s.match(/^POINT\s+(\w+)\s*=\s*(.+)$/i))){const v=m[2].split(",").map(x=>evalExpr(x));if(v.length<3)throw Error("POINT needs x,y,z");locations[m[1].toUpperCase()]={x:v[0],y:v[1],z:v[2],rx:v[3]??0,ry:v[4]??180,rz:v[5]??0};renderLocations();log("POINT "+m[1].toUpperCase())}
  else if((m=s.match(/^SHIFT\s+(\w+)\s+BY\s+(.+)$/i))){const l=locations[m[1].toUpperCase()],v=m[2].split(",").map(x=>evalExpr(x));if(!l)throw Error("Unknown location "+m[1]);l.x+=v[0]||0;l.y+=v[1]||0;l.z+=v[2]||0;renderLocations()}
+ else if((m=s.match(/^FOR\s+([A-Za-z_]\w*)\s*=\s*(.+?)\s+TO\s+(.+?)(?:\s+STEP\s+(.+))?$/i))){
+   const L=lines[pc];if(L.end===undefined)throw Error("FOR without ENDFOR");
+   const a=evalExpr(m[2]),b=evalExpr(m[3]),st=m[4]?evalExpr(m[4]):1;if(!st)throw Error("STEP cannot be 0");
+   const v=m[1].toUpperCase();vars[v]=a;loops[pc]={v,b,st};
+   if(st>0?a>b:a<b){pc=L.end+1;return "JUMP"}}
+ else if(/^(ENDFOR|END\s+FOR)$/i.test(s)){const L=lines[pc];if(L.start===undefined)throw Error("ENDFOR without FOR");
+   const lp=loops[L.start];vars[lp.v]+=lp.st;if(lp.st>0?vars[lp.v]<=lp.b:vars[lp.v]>=lp.b){pc=L.start+1;return "JUMP"}}
+ else if((m=s.match(/^FEED(?:\s+(\w+))?\s*$/i))){const p=getLoc(m[1]||"P1");if(!p)throw Error("Unknown location "+m[1]);
+   const o=objects.find(o=>o.visible&&!o.held&&!o.done);if(!o)throw Error("Feeder is empty - no parts left");
+   o.x=p.x;o.y=p.y;o.z=18;log("FEED: next part presented at "+(m[1]||"P1").toUpperCase())}
+ else if((m=s.match(/^PART\s+(\w+)\s*$/i))){const t=m[1].toUpperCase();if(!["CUBE","BOLT","PCB","BEARING"].includes(t))throw Error("PART must be CUBE, BOLT, PCB or BEARING");partType=t;draw();log("PART type = "+t)}
  else if(/^STATUS$/i.test(s)){log(`STATUS X=${robot.x.toFixed(1)} Y=${robot.y.toFixed(1)} Z=${robot.z.toFixed(1)} SPEED=${robot.speed}% GRIP=${robot.grip?"CLOSED":"OPEN"}`)}
  else if(/^READY$/i.test(s)){robot.j=[0,0,0,0,0,0];log("READY")}
  else if(/^TYPE\s+/i.test(s)){const a=s.replace(/^TYPE\s+/i,""),p=/^\w+$/.test(a)?getLoc(a):null;
@@ -427,7 +454,11 @@ function showTab(id,el){
 const EXAMPLES={"pick": ["Pick 10 objects", ".PROGRAM PICK10\n  SPEED 5\n  OPENI\n  POINT DROP = -150,-190,40\n  SET COUNT = 0\nNEXT:\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  APPRO DROP, 60\n  MOVES DROP\n  OPENI\n  DEPART 60\n  SHIFT P1 BY 40,0,0\n  SHIFT DROP BY 40,0,0\n  SET COUNT = COUNT + 1\n  IF COUNT < 10 JUMP NEXT\n  TYPE \"Picked \", COUNT\n  MOVE HOME\n.END"], "stack": ["Pick & Stack", ".PROGRAM STACK\n  SPEED 5\n  POINT STK = 100,-190,40\n  SET N = 0\nNEXT:\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  APPRO STK, 60\n  MOVES STK\n  OPENI\n  DEPART 60\n  SHIFT P1 BY 40,0,0\n  SHIFT STK BY 0,0,30\n  SET N = N + 1\n  TYPE \"Stacked \", N\n  IF N < 4 JUMP NEXT\n  MOVE HOME\n.END"], "appro": ["Approach / Depart", ".PROGRAM APPRODEPART\n  SPEED 5\n  OPENI\n  MOVE HOME\n  APPRO P1, 80\n  APPRO P1, 40\n  MOVES P1\n  CLOSEI\n  WAIT 0.5\n  DEPART 40\n  DEPART 80\n  APPRO P3, 60\n  MOVES P3\n  OPENI\n  DEPART 60\n  MOVE HOME\n.END"], "motion": ["Motion commands", ".PROGRAM MOTION\n  READY\n  SPEED 5\n  OPENI\n  MOVE P1\n  CLOSEI\n  DEPART 60\n  SPEED 5\n  MOVES P2\n  OPENI\n  SPEED 5\n  MOVE P3\n  DRIVE J1, 30\n  STATUS\n  MOVE HOME\n.END"], "teach": ["Teach with HERE", ".PROGRAM TEACH\n  SPEED 5\n  OPENI\n  MOVE P1\n  HERE TAUGHT1\n  CLOSEI\n  DEPART 60\n  TYPE TAUGHT1\n  MOVE P4\n  HERE TAUGHT2\n  OPENI\n  TYPE TAUGHT2\n  MOVE HOME\n  MOVE TAUGHT1\n  MOVE TAUGHT2\n  MOVE HOME\n.END"], "io": ["I/O & SIGNAL", ".PROGRAM IOTEST\n  SPEED 5\n  OPENI\n  SIGNAL 1\n  MOVE P1\n  CLOSEI\n  SIGNAL 2\n  DEPART 60\n  WAIT 1\n  SIGNAL -1\n  MOVE P3\n  OPENI\n  SIGNAL 3\n  WAIT 1\n  SIGNAL -2\n  SIGNAL -3\n  SIGNAL 4\n  MOVE HOME\n.END"], "cond": ["Conditional", ".PROGRAM COND\n  SPEED 5\n  OPENI\n  SET MODE = 2\n  IF MODE = 1 JUMP A\n  IF MODE = 2 JUMP B\n  TYPE \"Unknown mode\"\n  JUMP DONE\nA:\n  TYPE \"Mode 1: pick from P1\"\n  MOVE P1\n  CLOSEI\n  DEPART 60\n  MOVE P3\n  OPENI\n  JUMP DONE\nB:\n  TYPE \"Mode 2: pick from P2\"\n  MOVE P2\n  CLOSEI\n  DEPART 60\n  MOVE P4\n  OPENI\nDONE:\n  MOVE HOME\n.END"], "vision": ["Vision sequence", ".PROGRAM VISION\n  MOVE P3\n  SIGNAL 1\n  WAIT 0.5\n  SIGNAL -1\n  SET VX = 90\n  SET VY = 190\n  TYPE \"Vision found part at \", VX, \",\", VY\n  POINT PART = VX, VY, 40\n  SPEED 5\n  APPRO PART, 60\n  MOVES PART\n  CLOSEI\n  DEPART 60\n  MOVE P4\n  OPENI\n  MOVE HOME\n.END"], "counter": ["Counter / loop", ".PROGRAM COUNTER\n  SET I = 1\n  SET SUM = 0\nLOOP:\n  SET SUM = SUM + I\n  TYPE \"I=\", I, \"  SUM=\", SUM\n  SET I = I + 1\n  IF I <= 5 JUMP LOOP\n  TYPE \"Total \", SUM\n.END"], "grip": ["Gripper", ".PROGRAM GRIPPER\n  SPEED 5\n  OPENI\n  APPRO P1, 60\n  MOVES P1\n  STATUS\n  CLOSEI\n  STATUS\n  WAIT 1\n  DEPART 60\n  MOVE P3\n  OPENI\n  STATUS\n  MOVE HOME\n.END"], "wst": ["WAIT / STATUS / TYPE", ".PROGRAM WST\n  SPEED 5\n  TYPE \"Start\"\n  STATUS\n  OPENI\n  MOVE P1\n  CLOSEI\n  TYPE P1\n  SET T = 2\n  TYPE \"Waiting \", T, \" s\"\n  WAIT T\n  STATUS\n  DEPART 60\n  MOVE P3\n  OPENI\n  TYPE \"Done\"\n  MOVE HOME\n.END"]};
 EXAMPLES.sig=["External signal",".PROGRAM EXTSIG\n  TYPE \"Waiting for IN 1 (press the IN 1 button)\"\n  WAIT SIG(1)\n  TYPE \"Part present - picking\"\n  SPEED 5\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  SIGNAL 1\n  TYPE \"Waiting for IN 2 (release request)\"\n  WAIT SIG(2)\n  MOVE P3\n  OPENI\n  SIGNAL -1\n  IF SIG(3) JUMP SKIP\n  TYPE \"IN 3 was OFF - normal end\"\nSKIP:\n  MOVE HOME\n.END"];
 EXAMPLES.pallet=["Palletizing",".PROGRAM PALLET\n  SPEED 5\n  OPENI\n  POINT PAL = -60,-200,40\n  SET COUNT = 0\n  SET COL = 0\n  SET ROW = 0\nNEXT:\n  APPRO P1, 60\n  MOVES P1\n  CLOSEI\n  DEPART 60\n  APPRO PAL, 60\n  MOVES PAL\n  OPENI\n  DEPART 60\n  SHIFT P1 BY 40,0,0\n  SET COUNT = COUNT + 1\n  SHIFT PAL BY 40,0,0\n  SET COL = COL + 1\n  IF COL < 3 JUMP CHK\n  SHIFT PAL BY -120,40,0\n  SET COL = 0\n  SET ROW = ROW + 1\n  IF ROW < 2 JUMP CHK\n  SHIFT PAL BY 0,-80,30\n  SET ROW = 0\nCHK:\n  TYPE \"Placed \", COUNT, \" of 10\"\n  IF COUNT < 10 JUMP NEXT\n  MOVE HOME\n.END"];
-function loadExample(k){cd.value=EXAMPLES[k][1];resetSim();parseProgram();cd.scrollTop=0;document.querySelectorAll('#exbtn button').forEach(b=>b.classList.toggle('sel',b.dataset.k===k))}
+EXAMPLES.palfor=["Palletizing (FOR loop)",".PROGRAM PALLET_FOR\n  SPEED 5\n  OPENI\n  POINT PAL = -190,-190,40\n  SET COUNT = 0\n  FOR ROW = 1 TO 2\n    FOR COL = 1 TO 5\n      FEED\n      APPRO P1, 60\n      MOVES P1\n      CLOSEI\n      DEPART 60\n      APPRO PAL, 60\n      MOVES PAL\n      OPENI\n      DEPART 60\n      SHIFT PAL BY 40,0,0\n      SET COUNT = COUNT + 1\n      TYPE \"Placed \", COUNT, \" of 10\"\n    ENDFOR\n    SHIFT PAL BY -200,40,0\n  ENDFOR\n  MOVE HOME\n.END"];
+EXAMPLES.bolt=["Inspect bolt",".PROGRAM INSPECT_BOLT\n  SPEED 5\n  PART BOLT\n  OPENI\n  POINT GAUGE = -110,-40,120\n  POINT GOOD = -100,-190,40\n  POINT REJ = -200,-190,40\n  SET NGOOD = 0\n  SET NBAD = 0\n  FOR I = 1 TO 5\n    FEED\n    APPRO P1, 60\n    MOVES P1\n    CLOSEI\n    DEPART 60\n    MOVE GAUGE\n    TYPE \"Measuring bolt \", I\n    SIGNAL 1\n    WAIT 1\n    SET LEN = 28 + 2*I\n    SIGNAL -1\n    TYPE \"Length = \", LEN, \" mm (limits 32 to 36)\"\n    IF LEN < 32 JUMP BAD\n    IF LEN > 36 JUMP BAD\n    SIGNAL 2\n    APPRO GOOD, 60\n    MOVES GOOD\n    OPENI\n    DEPART 60\n    SIGNAL -2\n    SHIFT GOOD BY 0,40,0\n    SET NGOOD = NGOOD + 1\n    JUMP NEXTP\n  BAD:\n    SIGNAL 3\n    APPRO REJ, 60\n    MOVES REJ\n    OPENI\n    DEPART 60\n    SIGNAL -3\n    SHIFT REJ BY 0,40,0\n    SET NBAD = NBAD + 1\n  NEXTP:\n  ENDFOR\n  TYPE \"Good: \", NGOOD, \"   Rejected: \", NBAD\n  MOVE HOME\n.END","BOLT"];
+EXAMPLES.pcb=["Inspect PCB",".PROGRAM INSPECT_PCB\n  SPEED 5\n  PART PCB\n  OPENI\n  POINT CAM1 = -110,-40,120\n  POINT CAM2 = -110,-100,120\n  POINT GOOD = -100,-190,40\n  POINT REJ = -200,-190,40\n  SET NGOOD = 0\n  SET NBAD = 0\n  FOR I = 1 TO 5\n    FEED\n    APPRO P1, 60\n    MOVES P1\n    CLOSEI\n    DEPART 60\n    MOVE CAM1\n    TYPE \"PCB \", I, \": solder view\"\n    SIGNAL 1\n    WAIT 1\n    SET SOLDER = 98 - 2*I*I\n    SIGNAL -1\n    TYPE \"Solder score = \", SOLDER, \" % (min 75)\"\n    IF SOLDER < 75 JUMP BAD\n    MOVES CAM2\n    SIGNAL 1\n    WAIT 1\n    SET SKEW = 7 - 3*I\n    SIGNAL -1\n    TYPE \"Fiducial skew = \", SKEW, \" deg (limit 3)\"\n    IF SKEW > 3 JUMP BAD\n    IF SKEW < -3 JUMP BAD\n    SIGNAL 2\n    APPRO GOOD, 60\n    MOVES GOOD\n    OPENI\n    DEPART 60\n    SIGNAL -2\n    SHIFT GOOD BY 0,40,0\n    SET NGOOD = NGOOD + 1\n    JUMP NEXTP\n  BAD:\n    SIGNAL 3\n    APPRO REJ, 60\n    MOVES REJ\n    OPENI\n    DEPART 60\n    SIGNAL -3\n    SHIFT REJ BY 0,40,0\n    SET NBAD = NBAD + 1\n  NEXTP:\n  ENDFOR\n  TYPE \"Good: \", NGOOD, \"   Rejected: \", NBAD\n  MOVE HOME\n.END","PCB"];
+EXAMPLES.bearing=["Inspect bearing",".PROGRAM INSPECT_BEARING\n  SPEED 5\n  PART BEARING\n  OPENI\n  POINT GAUGE = -110,-40,120\n  POINT GOOD = -100,-190,40\n  POINT REJ = -200,-190,40\n  SET NGOOD = 0\n  SET NBAD = 0\n  FOR I = 1 TO 5\n    FEED\n    APPRO P1, 60\n    MOVES P1\n    CLOSEI\n    DEPART 60\n    MOVE GAUGE\n    TYPE \"Bearing \", I, \": bore check\"\n    SIGNAL 1\n    WAIT 1\n    SET BORE = 21 + I\n    SIGNAL -1\n    TYPE \"Bore = \", BORE, \" mm (limits 23 to 25)\"\n    IF BORE < 23 JUMP BAD\n    IF BORE > 25 JUMP BAD\n    TYPE \"Spin test\"\n    SIGNAL 4\n    WAIT 2\n    SET RUNOUT = 2*I\n    SIGNAL -4\n    TYPE \"Runout = \", RUNOUT, \" (max 7)\"\n    IF RUNOUT > 7 JUMP BAD\n    SIGNAL 2\n    APPRO GOOD, 60\n    MOVES GOOD\n    OPENI\n    DEPART 60\n    SIGNAL -2\n    SHIFT GOOD BY 0,40,0\n    SET NGOOD = NGOOD + 1\n    JUMP NEXTP\n  BAD:\n    SIGNAL 3\n    APPRO REJ, 60\n    MOVES REJ\n    OPENI\n    DEPART 60\n    SIGNAL -3\n    SHIFT REJ BY 0,40,0\n    SET NBAD = NBAD + 1\n  NEXTP:\n  ENDFOR\n  TYPE \"Good: \", NGOOD, \"   Rejected: \", NBAD\n  MOVE HOME\n.END","BEARING"];
+function loadExample(k){partType=EXAMPLES[k][2]||"CUBE";cd.value=EXAMPLES[k][1];resetSim();parseProgram();cd.scrollTop=0;document.querySelectorAll('#exbtn button').forEach(b=>b.classList.toggle('sel',b.dataset.k===k))}
 document.getElementById("exbtn").innerHTML=Object.entries(EXAMPLES).map(([k,v])=>`<button data-k="${k}" onclick="loadExample('${k}')">${v[0]}</button>`).join("");
 document.getElementById("inbtn").innerHTML='<b style="font-size:12px;align-self:center">External signals:</b>'+[1,2,3,4].map(n=>`<button id="in${n}" onclick="toggleIn(${n})">IN ${n}</button>`).join("");
 resize();loadExample('pick');lamps();ui();
